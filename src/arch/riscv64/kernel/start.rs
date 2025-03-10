@@ -1,5 +1,10 @@
 use core::arch::naked_asm;
+<<<<<<< Updated upstream
 use core::sync::atomic::{Ordering, AtomicBool, AtomicU64, fence};
+=======
+use core::sync::atomic::Ordering;
+>>>>>>> Stashed changes
+use core::arch::asm;
 
 use fdt::Fdt;
 use hermit_entry::Entry;
@@ -111,6 +116,18 @@ unsafe extern "C" fn pre_init(hart_id: usize, boot_info: Option<&'static RawBoot
             
             CPU_DATA[hart_id].is_initialized.store(true, Ordering::Release);
             CPU_DATA[hart_id].local_counter.store(1, Ordering::Release);
+
+			// TLS für Boot-Core initialisieren:
+			if let Some(tls_info) = env::boot_info().load_info.tls_info {
+				// Lade den Wert in 'tp' mithilfe des mv-Befehls:
+				asm!(
+					"mv tp, {val}",
+					val = in(reg) tls_info.start as usize,
+					options(nostack, nomem)
+				);
+				// Optional: memset für den .tbss-Bereich könnte hier erfolgen.
+			}
+<<<<<<< Updated upstream
         }
         crate::boot_processor_main()
     } else {
@@ -131,4 +148,32 @@ unsafe extern "C" fn pre_init(hart_id: usize, boot_info: Option<&'static RawBoot
             crate::application_processor_main()
         }
     }
+=======
+			NUM_CPUS.store(fdt.cpus().count().try_into().unwrap(), Ordering::Relaxed);
+			HART_MASK.store(hart_mask, Ordering::Relaxed);
+
+			// TLS für Boot-Core initialisieren:
+			if let Some(tls_info) = env::boot_info().load_info.tls_info {
+				// Lade den Wert in 'tp' mithilfe des mv-Befehls:
+				asm!(
+					"mv tp, {val}",
+					val = in(reg) tls_info.start as usize,
+					options(nostack, nomem)
+				);
+				// Optional: memset für den .tbss-Bereich könnte hier erfolgen.
+			}
+		}
+		crate::boot_processor_main()
+	} else {
+		#[cfg(not(feature = "smp"))]
+		{
+			error!("SMP support deactivated");
+			loop {
+				processor::halt();
+			}
+		}
+		#[cfg(feature = "smp")]
+		crate::application_processor_main();
+	}
+>>>>>>> Stashed changes
 }
