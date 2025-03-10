@@ -182,34 +182,40 @@ fn finish_processor_init() {
 }
 
 pub fn boot_next_processor() {
-	let new_hart_mask = HART_MASK.load(Ordering::Relaxed);
+    let new_hart_mask = HART_MASK.load(Ordering::Relaxed);
+    
+    info!("Current HART_MASK: 0x{:x}", new_hart_mask);
+    let next_hart_index = lsb(new_hart_mask);
 
-	let next_hart_index = lsb(new_hart_mask);
+    if let Some(next_hart_id) = next_hart_index {
+        info!("Preparing to start HART {}", next_hart_id);
+        
+        {
+            let stack = physicalmem::allocate(KERNEL_STACK_SIZE)
+                .expect("Failed to allocate boot stack for new core");
+            CURRENT_STACK_ADDRESS.store(stack.as_usize() as _, Ordering::Release);
+        }
 
-	if let Some(next_hart_id) = next_hart_index {
-		{
-			let stack = physicalmem::allocate(KERNEL_STACK_SIZE)
-				.expect("Failed to allocate boot stack for new core");
-			CURRENT_STACK_ADDRESS.store(stack.as_usize() as _, Ordering::Relaxed);
-		}
+        info!(
+            "Starting CPU {} with hart_id {}",
+            core_id() + 1,
+            next_hart_id
+        );
 
-		info!(
-			"Starting CPU {} with hart_id {}",
-			core_id() + 1,
-			next_hart_id
-		);
+        CPU_ONLINE.fetch_add(1, Ordering::Release);
 
-		// TODO: Old: Changing cpu_online will cause uhyve to start the next processor
-		CPU_ONLINE.fetch_add(1, Ordering::Release);
-
-		//When running bare-metal/QEMU we use the firmware to start the next hart
-		if !env::is_uhyve() {
-			sbi_rt::hart_start(next_hart_id as usize, start::_start as usize, 0).unwrap();
-		}
-	} else {
-		info!("All processors are initialized");
-		CPU_ONLINE.fetch_add(1, Ordering::Release);
-	}
+        if !env::is_uhyve() {
+            let result = sbi_rt::hart_start(next_hart_id as usize, start::_start as usize, 0);
+            if result.error == 0 {
+                info!("HART {} start requested", next_hart_id);
+            } else {
+                error!("Failed to start HART {}: error code {}", next_hart_id, result.error);
+            }
+        }
+    } else {
+        info!("All processors are initialized");
+        CPU_ONLINE.fetch_add(1, Ordering::Release);
+    }
 }
 
 pub fn print_statistics() {
