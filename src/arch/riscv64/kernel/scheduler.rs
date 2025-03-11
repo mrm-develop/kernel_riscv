@@ -281,7 +281,7 @@ impl TaskTLS {
 		let tls_start = VirtAddr::new(tls_info.start);
 		// Yes, it does, so we have to allocate TLS memory.
 		// Allocate enough space for the given size and one more variable of type usize, which holds the tls_pointer.
-		let tls_allocation_size = tls_size.align_up(32usize); // + mem::size_of::<usize>();
+		let tls_allocation_size = tls_size.align_up(tls_info.align as usize);
 		// We allocate in 128 byte granularity (= cache line size) to avoid false sharing
 		let memory_size = tls_allocation_size.align_up(128usize);
 		let layout =
